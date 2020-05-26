@@ -1,5 +1,5 @@
 
-import Base: +,-,*,/,getindex,setindex!,length,size,iterate,IteratorSize,BroadcastStyle,similar,eltype,show,showarg,repr,convert
+import Base: +,-,*,/,getindex,setindex!,length,size,iterate,IteratorSize,BroadcastStyle,similar,eltype,show,showarg,repr,convert,one,zero,promote_rule
 import Base.Broadcast: broadcastable
 
 import Statistics: sum,mean,median
@@ -9,7 +9,7 @@ using FITSIO
 #=============================================================================#
 # Pixel Struct
 
-struct Pixel
+struct Pixel <: Number
     data::Float64
     error::Float64
     mask::Int8
@@ -69,6 +69,7 @@ end
 # end CCDImage
 #=============================================================================#
 # Pixel Arithmetic
+# This is cleaner...
 
 function -(pix::Pixel)
     data = -pix.data
@@ -84,9 +85,11 @@ function add(pix1::Pixel, pix2::Pixel)
     return Pixel(data, error, mask)
 end
 
-function any_add(pix1::Pixel, c)
-    data = pix1.data + c
-    return Pixel(data, pix1.error, pix1.mask)
+function subtract(pix1::Pixel, pix2::Pixel)
+    data = pix1.data - pix2.data
+    error = sqrt(pix1.error^2 + pix2.error^2)
+    mask = pix1.mask | pix2.mask
+    return Pixel(data, error, mask)
 end
 
 function multiply(pix1::Pixel, pix2::Pixel)
@@ -96,32 +99,25 @@ function multiply(pix1::Pixel, pix2::Pixel)
     return Pixel(data, error, mask)
 end
 
-function any_multiply(pix::Pixel, x)
-    data = pix.data * x
-    error = pix.error * abs(x)
-    return Pixel(data, error, pix.mask)
+function divide(pix1::Pixel, pix2::Pixel)
+    data = pix1.data / pix2.data
+    error = sqrt((pix2.data * pix1.error)^2 + (pix1.data * pix2.error)^2)
+    mask = pix1.mask | pix2.mask
+    return Pixel(data, error, mask)
 end
 
-function /(x, pix::Pixel)
-    data = x / pix.data
-    error = abs(data)*abs(pix.error / pix.data)
-    return Pixel(data, error, pix.mask)
-end
-
-(+)(a::Pixel, b::Any) = any_add(a,b)
-(+)(a::Any, b::Pixel) = any_add(b,a)
 (+)(a::Pixel, b::Pixel) = add(a,b)
-
-(-)(a::Pixel, b::Any) = any_add(a,-b)
-(-)(a::Any, b::Pixel) = any_add(-b,a)
-(-)(a::Pixel, b::Pixel) = add(a,-b)
-
-(*)(a::Pixel, b::Any) = any_multiply(a,b)
-(*)(a::Any, b::Pixel) = any_multiply(b,a)
+(-)(a::Pixel, b::Pixel) = subtract(a,b)
 (*)(a::Pixel, b::Pixel) = multiply(a,b)
+(/)(a::Pixel, b::Pixel) = divide(a,b)
 
-(/)(a::Pixel, b::Any) = any_multiply(a,1/b)
-(/)(a::Pixel, b::Pixel) = multiply(a,1/b)
+convert(::Type{Pixel}, x::Number) = Pixel(x, 0, 0)
+convert(::Type{Pixel}, pix::Pixel) = pix
+
+promote_rule(::Type{Pixel}, ::Type{<:Number}) = Pixel
+
+one(::Type{Pixel}) = Pixel(1, 0, 0)
+zero(::Type{Pixel}) = Pixel(0, 0, 0)
 
 # end Pixel Arithmetic
 #=============================================================================#
