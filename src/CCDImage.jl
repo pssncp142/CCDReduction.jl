@@ -61,27 +61,17 @@ function Base.:similar(bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{CCDImage}}
     return CCDImage(zeros(axes(bc)), zeros(axes(bc)), zeros(axes(bc)))
 end
 
-function Base.:getindex(im::CCDImage, I::Vararg{T,2}) where T Union{Int64,UnitRange{Int64}}
-    rn1 = 1:1
-    rn2 = 1:1
-    if typeof(I[1]) == Int64 && typeof(I[2]) == Int64
-        return Pixel(im.data[I[1],I[2]], im.error[I[1],I[2]], im.mask[I[1],I[2]])
-    elseif typeof(I[1]) == Int64
-        rn1 = I[1]:I[1]
-    elseif typeof(I[2]) == Int64
-        rn2 = I[2]:I[2]
-    else
-        rn1 = I[1]
-        rn2 = I[2]
-    end
-    res = CCDImage(rn1[end]-rn1[1]+1, rn2[end]-rn2[1]+1)
-    for i in rn1
-        for j in rn2
-            res[i-rn1[1]+1,j-rn2[1]+1] = im[i,j]
+function Base.:getindex(im::CCDImage, I::Vararg{UnitRange{Int64}})
+    res = CCDImage(I[1][end]-I[1][1]+1, I[2][end]-I[2][1]+1)
+    for i in I[1]
+        for j in I[2]
+            res[i-I[1][1]+1,j-I[2][1]+1] = im[i,j]
         end
     end
     return res
 end
+
+Base.:getindex(im::CCDImage, I::Vararg{Int64,2}) = Pixel(im.data[I...], im.error[I...], im.mask[I...])
 
 function Base.:setindex!(im::CCDImage, pix::Pixel, I::Vararg{Int64,2})
     if nfields(I) == 1
@@ -95,7 +85,7 @@ function Base.:setindex!(im::CCDImage, pix::Pixel, I::Vararg{Int64,2})
     end
 end
 
-Base.:setindex!(im::CCDImage, val::Number, I::Vararg{Int64,2}) = setindex!(im, convert(Pixel, val), I...)
+Base.:setindex!(im::CCDImage, val::Number, I::Vararg{Int64,2}) = setindex!(im, Pixel(val), I...)
 
 function Base.:iterate(im::CCDImage, ndx=1)
 	return ndx > length(im) ? nothing : (Pixel(im.data[ndx], im.error[ndx], im.mask[ndx]), ndx+1)
