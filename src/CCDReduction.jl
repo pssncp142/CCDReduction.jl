@@ -10,6 +10,7 @@ export subtract_bias,
        Pixel
 
 include("methods.jl")
+include("pixel.jl")
 include("CCDImage.jl")
 
 end

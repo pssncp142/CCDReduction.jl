@@ -1,25 +1,9 @@
 
-import Base: +,-,*,/,getindex,setindex!,length,size,iterate,IteratorSize,BroadcastStyle,similar,eltype,show,showarg,repr,convert,one,zero,promote_rule,float,sqrt
 import Base.Broadcast: broadcastable
-
-import Statistics: sum,mean,median
-
+import Base
 using FITSIO
 
 #=============================================================================#
-# Pixel Struct
-
-struct Pixel <: Real
-    data::Float64
-    error::Float64
-    mask::Int8
-end
-
-# val+/-error(*)
-repr(pix::Pixel) = string(repr(pix.data),"+/-",repr(pix.error), convert(Bool, pix.mask) ? "*" : "")
-
-show(io::IO, pix::Pixel) = print(io, repr(pix))
-
 # CCD Lazy
 struct CCDLazy
     f_name::String
@@ -35,10 +19,10 @@ end
 
 broadcastable(im::CCDLazy) = broadcastable(convert(CCDImage, im))
 
-length(im::CCDLazy) = im.length
-size(im::CCDLazy) = im.size
+Base.:length(im::CCDLazy) = im.length
+Base.:size(im::CCDLazy) = im.size
 
-# end Pixel Struct
+# end CCDLazy
 #=============================================================================#
 # CCDImage Definitions
 
@@ -59,7 +43,7 @@ CCDImage(ndx1::Int64, ndx2::Int64) = CCDImage(zeros(ndx1, ndx2), zeros(ndx1,ndx2
 
 CCDImage(f_name::String) = CCDLazy(f_name)
 
-function convert(T::Type{CCDImage}, im::CCDLazy)
+function Base.:convert(T::Type{CCDImage}, im::CCDLazy)
     hdu = FITS(im.f_name)
     data = read(hdu[1])
     shape = size(hdu[1])
@@ -68,78 +52,16 @@ end
 
 # end CCDImage
 #=============================================================================#
-# Pixel Arithmetic
-# This is cleaner...
-
-function -(pix::Pixel)
-    data = -pix.data
-    error = pix.error
-    mask = pix.mask
-    return Pixel(data, error, mask)
-end
-
-function add(pix1::Pixel, pix2::Pixel)
-    data = pix1.data + pix2.data
-    error = sqrt(pix1.error^2 + pix2.error^2)
-    mask = pix1.mask | pix2.mask
-    return Pixel(data, error, mask)
-end
-
-function subtract(pix1::Pixel, pix2::Pixel)
-    data = pix1.data - pix2.data
-    error = sqrt(pix1.error^2 + pix2.error^2)
-    mask = pix1.mask | pix2.mask
-    return Pixel(data, error, mask)
-end
-
-function multiply(pix1::Pixel, pix2::Pixel)
-    data = pix1.data * pix2.data
-    error = data*sqrt((pix1.error/pix1.data)^2 + (pix2.error/pix2.data)^2)
-    mask = pix1.mask | pix2.mask
-    return Pixel(data, error, mask)
-end
-
-function divide(pix1::Pixel, pix2::Pixel)
-    data = pix1.data / pix2.data
-    error = data*sqrt((pix1.error/pix1.data)^2 + (pix2.error/pix2.data)^2)
-    mask = pix1.mask | pix2.mask
-    return Pixel(data, error, mask)
-end
-
-function sqrt(pix::Pixel)
-    data = sqrt(pix.data)
-    error = data*0.5*pix.error/pix.data
-    return Pixel(data, error, pix.mask)
-end
-
-(+)(a::Pixel, b::Pixel) = add(a,b)
-(-)(a::Pixel, b::Pixel) = subtract(a,b)
-(*)(a::Pixel, b::Pixel) = multiply(a,b)
-(/)(a::Pixel, b::Pixel) = divide(a,b)
-
-#float(pix::Pixel) = float(pix.data)
-#Float64(pix::Pixel) = Float64(pix.data)
-
-convert(::Type{Pixel}, x::Number) = Pixel(x, 0, 0)
-convert(::Type{Pixel}, pix::Pixel) = pix
-
-promote_rule(::Type{Pixel}, ::Type{<:Number}) = Pixel
-
-one(::Type{Pixel}) = Pixel(1, 0, 0)
-zero(::Type{Pixel}) = Pixel(0, 0, 0)
-
-# end Pixel Arithmetic
-#=============================================================================#
 # Array Functionality
 
-BroadcastStyle(::Type{<:CCDImage}) = Broadcast.ArrayStyle{CCDImage}()
-eltype(::Type{CCDImage}) = Pixel
+Base.:BroadcastStyle(::Type{<:CCDImage}) = Broadcast.ArrayStyle{CCDImage}()
+Base.:eltype(::Type{CCDImage}) = Pixel
 
-function similar(bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{CCDImage}}, ::Type{ElType}) where ElType
-    return CCDImage(ones(axes(bc)), zeros(axes(bc)), zeros(axes(bc)))
+function Base.:similar(bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{CCDImage}}, ::Type{ElType}) where ElType
+    return CCDImage(zeros(axes(bc)), zeros(axes(bc)), zeros(axes(bc)))
 end
 
-function getindex(im::CCDImage, I::Vararg{T,2}) where T Union{Int64,UnitRange{Int64}}
+function Base.:getindex(im::CCDImage, I::Vararg{T,2}) where T Union{Int64,UnitRange{Int64}}
     rn1 = 1:1
     rn2 = 1:1
     if typeof(I[1]) == Int64 && typeof(I[2]) == Int64
@@ -161,7 +83,7 @@ function getindex(im::CCDImage, I::Vararg{T,2}) where T Union{Int64,UnitRange{In
     return res
 end
 
-function setindex!(im::CCDImage, pix::Pixel, I::Vararg{Int64,2})
+function Base.:setindex!(im::CCDImage, pix::Pixel, I::Vararg{Int64,2})
     if nfields(I) == 1
         im.data[I[1]] = pix.data
         im.error[I[1]] = pix.error
@@ -173,35 +95,14 @@ function setindex!(im::CCDImage, pix::Pixel, I::Vararg{Int64,2})
     end
 end
 
-setindex!(im::CCDImage, val::Number, I::Vararg{Int64,2}) = setindex!(im, convert(Pixel, val), I...)
+Base.:setindex!(im::CCDImage, val::Number, I::Vararg{Int64,2}) = setindex!(im, convert(Pixel, val), I...)
 
-function iterate(im::CCDImage, ndx=1)
+function Base.:iterate(im::CCDImage, ndx=1)
 	return ndx > length(im) ? nothing : (Pixel(im.data[ndx], im.error[ndx], im.mask[ndx]), ndx+1)
 end
 
-function length(im::CCDImage)
-    return length(im.data)
-end
-
-function size(im::CCDImage)
-    return size(im.data)
-end
+Base.:length(im::CCDImage) = length(im.data)
+Base.:size(im::CCDImage) = Base.size(im.data)
 
 # end Array Functionality
-#=============================================================================#
-# Simple Statistics (Just as an example)
-#=
-function sum(im::CCDImage)
-    return sum(im.data[im.mask .== false])
-end
-
-function mean(im::CCDImage)
-    return mean(im.data[im.mask .== false])
-end
-
-function median(im::CCDImage)
-    return median(im.data[im.mask .== false])
-end
-=#
-# end Simple Statistics
 #=============================================================================#
